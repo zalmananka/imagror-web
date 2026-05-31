@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useImageStore } from "@/lib/imageStore";
 import DownloadBtn from "./DownloadBtn";
 
@@ -18,14 +18,19 @@ export default function Editor() {
   const updateSettings = useImageStore((s) => s.updateSettings);
   const processImage   = useImageStore((s) => s.processImage);
 
+  // Track the last selectedId that was auto-processed so we only auto-process
+  // once per image selection, never on settings changes.
+  const lastAutoProcessedId = useRef<string | null>(null);
+
   useEffect(() => {
-    if (selectedId) {
-      const timer = setTimeout(() => {
-        processImage();
-      }, 500);
-      return () => clearTimeout(timer);
+    // Only auto-process when the user selects a different image — not when
+    // settings change. This prevents the "erratic focus" bug caused by the
+    // store running processImage (which used to hit the network) mid-edit.
+    if (selectedId && selectedId !== lastAutoProcessedId.current) {
+      lastAutoProcessedId.current = selectedId;
+      processImage();
     }
-  }, [settings, selectedId, processImage]);
+  }, [selectedId, processImage]);
 
   const entry = library.find((e) => e.id === selectedId);
   if (!entry) return null;
@@ -171,6 +176,34 @@ export default function Editor() {
             </p>
           )}
 
+          {/* Apply Changes button */}
+          <button
+            onClick={() => processImage()}
+            disabled={processing}
+            aria-label="Apply changes"
+            className="w-full rounded-lg py-2.5 flex items-center justify-center gap-2 font-semibold text-sm transition-all"
+            style={{
+              background: processing ? "var(--bd)" : "var(--primary)",
+              color: "#ffffff",
+              cursor: processing ? "not-allowed" : "pointer",
+              opacity: processing ? 0.7 : 1,
+            }}
+            onMouseEnter={(e) => { if (!processing) (e.currentTarget as HTMLElement).style.filter = "brightness(1.1)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = "brightness(1)"; }}
+          >
+            {processing ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin" />
+                Processing…
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-bolt" />
+                Apply Changes
+              </>
+            )}
+          </button>
+
           {/* Download button container */}
           <DownloadBtn />
         </div>
@@ -191,7 +224,7 @@ export default function Editor() {
 
           {/* Image preview */}
           <div
-            className="rounded-lg overflow-hidden flex justify-center items-center p-2"
+            className="rounded-lg overflow-hidden flex justify-center items-center p-2 relative"
             style={{ background: "var(--bg)", border: "1px solid var(--bd)" }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -201,6 +234,15 @@ export default function Editor() {
               className="w-full h-auto object-contain rounded-sm"
               style={{ maxHeight: "320px" }}
             />
+            {/* Processing overlay */}
+            {processing && (
+              <div
+                className="absolute inset-0 flex items-center justify-center rounded-lg"
+                style={{ background: "rgba(0,0,0,0.45)" }}
+              >
+                <i className="fa-solid fa-spinner fa-spin text-white text-2xl" />
+              </div>
+            )}
           </div>
 
           {/* Info row */}
