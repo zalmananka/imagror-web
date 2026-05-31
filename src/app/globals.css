@@ -1,26 +1,106 @@
+/* app/globals.css */
 @import "tailwindcss";
 
+/*
+  ─────────────────────────────────────────────────────────────────────────
+  IMPORTANT — DO NOT add "padding: 0" or "margin: 0" on * here.
+
+  Tailwind v4 outputs any @layer base rules as UNLAYERED CSS in the final
+  bundle. Unlayered CSS always wins over @layer utilities — which means it
+  would strip every px-*, py-*, p-*, m-*, mx-*, my-* utility class.
+
+  Tailwind's own preflight already resets padding/margin inside the correct
+  layer. Just define custom tokens and element-level styles here.
+  ─────────────────────────────────────────────────────────────────────────
+*/
+
+/* ── Custom color tokens ── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg:            #09090b;
+  --surface:       #18181b;
+  --surface-hover: #27272a;
+  --bd:            #3f3f46;
+  --primary:       #3b82f6;
+  --success:       #22c55e;
+  --text:          #f4f4f5;
+  --muted:         #a1a1aa;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ── Box-sizing only — safe to put on * because it doesn't strip utilities ── */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── HTML / Body ── */
+html {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
 }
+
+@media (min-width: 768px) {
+  body { padding: 2rem; }
+}
+
+/* ── Placeholder ── */
+input::placeholder {
+  color: var(--muted);
+}
+
+/* ── Number inputs — hide browser arrows ── */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] { -moz-appearance: textfield; }
+
+/* ── Range slider (exact match to reference HTML) ── */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--bd);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #93c5fd;
+  cursor: pointer;
+  margin-top: -6px;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: var(--bd);
+  border-radius: 2px;
+  cursor: pointer;
+}
+input[type=range]::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: #93c5fd;
+  cursor: pointer;
+  border: none;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--bd); border-radius: 99px; }
