@@ -164,11 +164,35 @@ export const useImageStore = create<ImageStore>((set, get) => ({
   },
 
   // ─── addFromUrl ─────────────────────────────────────────────────────────────
+  // Uses the /api/fetch-image server-side proxy to bypass CORS.
   addFromUrl: async (url) => {
-    const res = await fetch(`/api/fetch-url?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error("Failed to fetch image");
+    const res = await fetch(`/api/fetch-image?url=${encodeURIComponent(url)}`);
+    if (!res.ok) {
+      // Surface the server's error message if available
+      let msg = "Failed to fetch image.";
+      try {
+        const body = await res.json() as { error?: string };
+        if (body.error) msg = body.error;
+      } catch { /* ignore parse errors */ }
+      throw new Error(msg);
+    }
+
     const blob = await res.blob();
-    const filename = url.split("/").pop()?.split("?")[0] || "url-image.jpg";
+
+    // Derive a clean filename from the URL path
+    const rawName = url.split("/").pop()?.split("?")[0] || "url-image";
+    // Ensure the extension matches the actual MIME type returned by the proxy
+    const extMap: Record<string, string> = {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+      "image/gif": "gif",
+      "image/avif": "avif",
+    };
+    const ext = extMap[blob.type] ?? "jpg";
+    const hasExt = /\.\w{2,5}$/.test(rawName);
+    const filename = hasExt ? rawName : `${rawName}.${ext}`;
+
     const file = new File([blob], filename, { type: blob.type });
     const entry = await fileToEntry(file);
 

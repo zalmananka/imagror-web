@@ -1,6 +1,22 @@
 "use client";
-import { useRef, useState, DragEvent } from "react";
+import { useRef, useState, useEffect, DragEvent } from "react";
 import { useImageStore } from "@/lib/imageStore";
+
+const ACCEPTED_MIME = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"];
+
+/** Toast notification — shown on paste/URL errors, auto-hides after 4 s. */
+function useToast() {
+  const [message, setMessage] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function show(msg: string) {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setMessage(msg);
+    timerRef.current = setTimeout(() => setMessage(null), 4000);
+  }
+
+  return { message, show };
+}
 
 export default function Uploader() {
   const addImages  = useImageStore((s) => s.addImages);
@@ -9,12 +25,53 @@ export default function Uploader() {
   const [urlInput,   setUrlInput]   = useState("");
   const [urlLoading, setUrlLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const { message: toastMsg, show: showToast } = useToast();
 
-  const ACCEPTED = ["image/png", "image/jpeg", "image/webp"];
+  // ── Global clipboard paste listener ────────────────────────────────────────
+  useEffect(() => {
+    function handlePaste(e: ClipboardEvent) {
+      // Do NOT intercept when the user is typing inside a text/textarea input,
+      // so normal text-paste (e.g. pasting a URL string) works as expected.
+      const target = e.target as HTMLElement;
+      const isTextInput =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
 
+      if (isTextInput) return;
+
+      const items = Array.from(e.clipboardData?.items ?? []);
+      const imageItem = items.find(
+        (item) => item.kind === "file" && ACCEPTED_MIME.includes(item.type)
+      );
+
+      if (!imageItem) {
+        // Clipboard has content but it's not a supported image — stay silent
+        // (don't confuse users who paste text elsewhere on the page).
+        return;
+      }
+
+      const file = imageItem.getAsFile();
+      if (!file) return;
+
+      // Give the pasted file a friendly name if it doesn't have one
+      const name =
+        file.name && file.name !== "image.png" ? file.name : `pasted-image.${file.type.split("/")[1] || "png"}`;
+      const namedFile = new File([file], name, { type: file.type });
+
+      addImages([namedFile]);
+      showToast("📋 Image pasted from clipboard!");
+    }
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [addImages, showToast]);
+
+  // ── File helpers ────────────────────────────────────────────────────────────
   function handleFiles(files: FileList | null) {
     if (!files) return;
-    const valid = Array.from(files).filter((f) => ACCEPTED.includes(f.type));
+    const valid = Array.from(files).filter((f) => ACCEPTED_MIME.includes(f.type));
     if (valid.length) addImages(valid);
   }
 
@@ -30,8 +87,12 @@ export default function Uploader() {
     try {
       await addFromUrl(urlInput.trim());
       setUrlInput("");
-    } catch { /* silent */ }
-    finally { setUrlLoading(false); }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to fetch image.";
+      showToast(`⚠️ ${msg}`);
+    } finally {
+      setUrlLoading(false);
+    }
   }
 
   return (
@@ -58,7 +119,7 @@ export default function Uploader() {
         <input
           ref={fileRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
           multiple
           style={{ display: "none" }}
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
@@ -80,7 +141,7 @@ export default function Uploader() {
           </span>
         </p>
         <p className="text-sm text-center" style={{ color: "var(--muted)" }}>
-          PNG, JPG, JPEG — multiple files supported
+          PNG, JPG, WEBP, GIF — or <kbd className="px-1 py-0.5 rounded text-xs" style={{ background: "var(--bd)" }}>Ctrl+V</kbd> to paste from clipboard
         </p>
       </div>
 
@@ -88,6 +149,7 @@ export default function Uploader() {
       <div className="flex gap-4 items-center">
         <div className="relative flex-grow">
           <input
+            ref={urlInputRef}
             type="text"
             placeholder="Or paste an image URL..."
             value={urlInput}
@@ -120,6 +182,23 @@ export default function Uploader() {
           {urlLoading ? "Loading…" : "Fetch"}
         </button>
       </div>
+
+      {/* Toast notification */}
+      {toastMsg && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-xl transition-all"
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--bd)",
+            color: "var(--text)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          {toastMsg}
+        </div>
+      )}
 
     </section>
   );
