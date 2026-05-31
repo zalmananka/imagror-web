@@ -5,6 +5,9 @@ import DownloadBtn from "./DownloadBtn";
 
 const FORMAT_OPTIONS = ["jpeg", "png", "webp"] as const;
 
+/** Debounce delay (ms) for settings changes (slider drags, dimension inputs). */
+const SETTINGS_DEBOUNCE_MS = 200;
+
 function fmtSize(kb: number) {
   return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb.toFixed(0)} KB`;
 }
@@ -18,19 +21,28 @@ export default function Editor() {
   const updateSettings = useImageStore((s) => s.updateSettings);
   const processImage   = useImageStore((s) => s.processImage);
 
-  // Track the last selectedId that was auto-processed so we only auto-process
-  // once per image selection, never on settings changes.
-  const lastAutoProcessedId = useRef<string | null>(null);
+  // Tracks the selectedId from the *previous* render so we can tell whether
+  // the effect fired because of a new image selection vs. a settings change.
+  const prevSelectedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Only auto-process when the user selects a different image — not when
-    // settings change. This prevents the "erratic focus" bug caused by the
-    // store running processImage (which used to hit the network) mid-edit.
-    if (selectedId && selectedId !== lastAutoProcessedId.current) {
-      lastAutoProcessedId.current = selectedId;
+    if (!selectedId) return;
+
+    // Distinguish: image just switched (process immediately) vs. only settings
+    // changed (debounce so slider drags stay smooth).
+    const isNewImage = selectedId !== prevSelectedIdRef.current;
+    prevSelectedIdRef.current = selectedId;
+    const delay = isNewImage ? 0 : SETTINGS_DEBOUNCE_MS;
+
+    const timer = setTimeout(() => {
+      // processImage only writes { result, processing } — never selectedId or
+      // settings — so this effect's deps never change inside the callback and
+      // there is zero risk of an infinite re-render loop.
       processImage();
-    }
-  }, [selectedId, processImage]);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [settings, selectedId, processImage]);
 
   const entry = library.find((e) => e.id === selectedId);
   if (!entry) return null;
@@ -175,34 +187,6 @@ export default function Editor() {
               PNG is lossless — quality not applicable.
             </p>
           )}
-
-          {/* Apply Changes button */}
-          <button
-            onClick={() => processImage()}
-            disabled={processing}
-            aria-label="Apply changes"
-            className="w-full rounded-lg py-2.5 flex items-center justify-center gap-2 font-semibold text-sm transition-all"
-            style={{
-              background: processing ? "var(--bd)" : "var(--primary)",
-              color: "#ffffff",
-              cursor: processing ? "not-allowed" : "pointer",
-              opacity: processing ? 0.7 : 1,
-            }}
-            onMouseEnter={(e) => { if (!processing) (e.currentTarget as HTMLElement).style.filter = "brightness(1.1)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.filter = "brightness(1)"; }}
-          >
-            {processing ? (
-              <>
-                <i className="fa-solid fa-spinner fa-spin" />
-                Processing…
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-bolt" />
-                Apply Changes
-              </>
-            )}
-          </button>
 
           {/* Download button container */}
           <DownloadBtn />
